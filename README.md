@@ -67,3 +67,7 @@ O projeto consiste em um único arquivo `Antigravity-Gemini-3.1.html` que conté
 ## 📄 Licença
 
 Este projeto é open-source e está disponível para fins educacionais e de demonstração.
+
+## Arquivos na pasta
+- Antigravity-Gemini-3.1.html
+- bit-x-qubut.jpg
