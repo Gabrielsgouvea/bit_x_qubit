@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bit vs Qubit — Simulação de Labirinto</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a1a;
+            --panel: #12122a;
+            --classic: #4fc3f7;
+            --quantum: #ce93d8;
+            --wall: #2a2a5a;
+            --path: #0d0d2b;
+            --start-color: rgba(105, 240, 174, 0.6);
+            --exit-color: rgba(255, 235, 59, 0.55);
+        }
+        
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0; padding: 20px; 
+            font-family: 'Roboto', sans-serif;
+            background: var(--bg); 
+            color: white;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            width: 100%;
+        }
+
+        h1 { 
+            margin: 0 0 20px 0; 
+            font-size: 2.2rem; 
+            font-weight: 300; 
+            background: linear-gradient(90deg, var(--classic), var(--quantum)); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+        }
+
+        button {
+            background: linear-gradient(45deg, var(--classic), var(--quantum));
+            border: none; 
+            border-radius: 30px; 
+            padding: 15px 40px; 
+            font-size: 1.2rem;
+            color: white; 
+            cursor: pointer; 
+            transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+            font-weight: bold; 
+            text-transform: uppercase; 
+            letter-spacing: 1px;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(206, 147, 216, 0.3);
+        }
+        
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .panels {
+            display: flex; 
+            gap: 30px; 
+            width: 100%; 
+            max-width: 1100px;
+            flex-wrap: wrap; 
+            justify-content: center;
+        }
+
+        .panel {
+            background: var(--panel); 
+            border-radius: 20px; 
+            padding: 25px;
+            flex: 1; 
+            min-width: 320px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+            display: flex; 
+            flex-direction: column;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .panel-header { 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+            margin-bottom: 10px; 
+        }
+
+        .panel-header h2 { 
+            margin: 0; 
+            font-size: 1.4rem; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px; 
+        }
+
+        .desc { 
+            font-size: 0.95rem; 
+            color: #aaa; 
+            margin-bottom: 20px; 
+            min-height: 45px; 
+        }
+
+        .canvas-container {
+            width: 100%; 
+            aspect-ratio: 1/1; 
+            position: relative;
+            background: var(--path); 
+            border-radius: 12px; 
+            overflow: hidden;
+            border: 2px solid rgba(255,255,255,0.05);
+        }
+
+        canvas { 
+            width: 100%; 
+            height: 100%; 
+            display: block; 
+        }
+
+        .overlay {
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%;
+            background: rgba(10, 10, 26, 0.85); 
+            backdrop-filter: blur(4px);
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center;
+            opacity: 0; 
+            pointer-events: none; 
+            transition: opacity 0.4s ease;
+            z-index: 10;
+        }
+
+        .overlay.active { opacity: 1; pointer-events: auto; }
+        .overlay h3 { font-size: 1.6rem; margin: 0 0 15px 0; text-align: center; padding: 0 20px; text-shadow: 0 2px 5px rgba(0,0,0,0.5);}
+        .overlay .time { font-size: 1.2rem; background: rgba(255,255,255,0.1); padding: 8px 20px; border-radius: 20px; font-weight: bold; }
+
+        .status-bar {
+            background: rgba(0,0,0,0.4); 
+            border-radius: 12px; 
+            padding: 15px;
+            margin-top: 20px; 
+            font-family: monospace; 
+            font-size: 1rem;
+            display: flex; 
+            align-items: center; 
+            color: #ddd;
+            min-height: 50px;
+        }
+
+        .legend {
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 15px; 
+            margin-top: 20px; 
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .color-box { width: 14px; height: 14px; border-radius: 4px; }
+        
+        .c-classic { background: var(--classic); }
+        .c-visited { background: rgba(58,123,213,0.5); }
+        .c-deadend { background: rgba(239,83,80,0.5); }
+        
+        .c-quantum { background: var(--quantum); }
+        
+        .c-wall { background: var(--wall); }
+        .c-path { background: var(--path); border: 1px solid rgba(255,255,255,0.1); }
+
+        @media (max-width: 800px) {
+            .panels { flex-direction: column; align-items: center; }
+            .panel { width: 100%; max-width: 500px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Bit vs Qubit — Simulação de Labirinto</h1>
+        <button id="btnStart" onclick="clickStart()">Começar</button>
+    </header>
+
+    <div class="panels">
+        <!-- Panel Classic -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2>🖥️ Computador Clássico (Bit)</h2>
+            </div>
+            <div class="desc">Exploração sequencial (DFS). Um único agente explora um caminho por vez, testando opções e marcando becos sem saída.</div>
+            <div class="canvas-container">
+                <canvas id="canvasC"></canvas>
+                <div class="overlay" id="overlayC">
+                    <h3 style="color: var(--classic)">Labirinto resolvido!</h3>
+                    <div class="time" id="timeC">Tempo: 0.00s</div>
+                </div>
+            </div>
+            <div class="status-bar" id="statusC">Pronto para iniciar</div>
+            <div class="legend">
+                <div class="legend-item"><div class="color-box c-classic"></div> Agente</div>
+                <div class="legend-item"><div class="color-box c-visited"></div> Visitado</div>
+                <div class="legend-item"><div class="color-box c-deadend"></div> Beco sem saída</div>
+            </div>
+        </div>
+
+        <!-- Panel Quantum -->
+        <div class="panel">
+            <div class="panel-header">
+                <h2>⚛️ Computador Quântico (Qubit)</h2>
+            </div>
+            <div class="desc">Exploração paralela (BFS/Multiplicação). O agente divide-se e testa todos os caminhos válidos simultaneamente.</div>
+            <div class="canvas-container">
+                <canvas id="canvasQ"></canvas>
+                <div class="overlay" id="overlayQ">
+                    <h3 style="color: var(--quantum)">Todos os qubits saíram juntos!</h3>
+                    <div class="time" id="timeQ">Tempo: 0.00s</div>
+                </div>
+            </div>
+            <div class="status-bar" id="statusQ">Pronto para iniciar</div>
+            <div class="legend">
+                <div class="legend-item"><div class="color-box c-quantum"></div> Qubits (Agentes)</div>
+                <div class="legend-item"><div class="color-box c-path"></div> Caminho</div>
+                <div class="legend-item"><div class="color-box c-wall"></div> Parede</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvasC = document.getElementById('canvasC');
+        const canvasQ = document.getElementById('canvasQ');
+        const btn = document.getElementById('btnStart');
+        const statusC = document.getElementById('statusC');
+        const statusQ = document.getElementById('statusQ');
+        const overlayC = document.getElementById('overlayC');
+        const overlayQ = document.getElementById('overlayQ');
+        const timeC = document.getElementById('timeC');
+        const timeQ = document.getElementById('timeQ');
+
+        const MAZE_SIZE = 17;
+        const CLASSIC_DUR = 6000; // Aumentado para dar tempo humano ler (6 seg)
+        const QUANTUM_DUR = 2000; // Aumentado para 2 seg
+
+        let wC, wQ;
+        let isSimulating = false;
+        let simLoopId = null;
+        let classicDone = false;
+        let quantumDone = false;
+        let startTime = null;
+
+        let currentMaze = null;
+        let classicTimeline = [];
+        let quantumTimeline = [];
+
+        // Trata o High DPI (Nitidez extrema)
+        function initCanvasSizes() {
+            const r1 = canvasC.parentElement.getBoundingClientRect();
+            const r2 = canvasQ.parentElement.getBoundingClientRect();
+            wC = r1.width; 
+            wQ = r2.width;
+            
+            canvasC.width = wC * devicePixelRatio;
+            canvasC.height = wC * devicePixelRatio;
+            canvasC.getContext('2d').scale(devicePixelRatio, devicePixelRatio);
+
+            canvasQ.width = wQ * devicePixelRatio;
+            canvasQ.height = wQ * devicePixelRatio;
+            canvasQ.getContext('2d').scale(devicePixelRatio, devicePixelRatio);
+        }
+
+        // --- Animações Pre-Start ---
+        let classicPreValues = Array(6*5).fill('0');
+        setInterval(() => {
+            if(isSimulating) return;
+            for(let i=0; i<30; i++) classicPreValues[i] = Math.random() > 0.5 ? '1' : '0';
+            renderPreClassic();
+        }, 500);
+
+        function renderPreClassic() {
+            if(!wC || isSimulating) return;
+            const ctx = canvasC.getContext('2d');
+            ctx.clearRect(0, 0, wC, wC);
+            
+            let cols = 6, rows = 5;
+            let cw = wC / cols, ch = wC / rows;
+            ctx.font = 'bold ' + (Math.min(cw, ch) * 0.4) + 'px Roboto';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            for(let r=0; r<rows; r++){
+                for(let c=0; c<cols; c++){
+                    let cx = c*cw + cw/2, cy = r*ch + ch/2;
+                    ctx.fillStyle = 'rgba(79, 195, 247, 0.1)';
+                    ctx.beginPath(); 
+                    ctx.arc(cx, cy, Math.min(cw,ch)*0.4, 0, Math.PI*2); 
+                    ctx.fill();
+
+                    ctx.fillStyle = '#4fc3f7';
+                    ctx.fillText(classicPreValues[r*cols + c], cx, cy);
+                }
+            }
+        }
+
+        function renderPreQuantum() {
+            if(!wQ || isSimulating) return;
+            const ctx = canvasQ.getContext('2d');
+            ctx.clearRect(0, 0, wQ, wQ);
+            
+            let cx = wQ/2, cy = wQ/2, r = wQ*0.35;
+            ctx.strokeStyle = '#ce93d8';
+            ctx.lineWidth = 2;
+            
+            // Sphere
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.stroke(); 
+            
+            // Equator
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath(); ctx.ellipse(cx, cy, r, r*0.3, 0, 0, 2*Math.PI); ctx.stroke(); 
+            ctx.setLineDash([]);
+            
+            // Axes
+            ctx.strokeStyle = 'rgba(206, 147, 216, 0.3)';
+            ctx.beginPath(); ctx.moveTo(cx, cy-r); ctx.lineTo(cx, cy+r); ctx.stroke(); 
+            ctx.beginPath(); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy); ctx.stroke(); 
+
+            // State vector
+            ctx.strokeStyle = '#f44336';
+            ctx.lineWidth = 3;
+            let angle = -Math.PI/4;
+            let ax = cx + Math.cos(angle)*r, ay = cy + Math.sin(angle)*r;
+            ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ax, ay); ctx.stroke();
+            
+            // Arrow head
+            ctx.beginPath(); ctx.arc(ax, ay, 5, 0, 2*Math.PI); ctx.fillStyle='#f44336'; ctx.fill();
+
+            // Labels
+            ctx.fillStyle = '#ce93d8';
+            ctx.font = (wQ/15) + 'px Roboto';
+            ctx.textAlign = 'center';
+            ctx.fillText('|0⟩', cx, cy - r - 15);
+            ctx.fillText('|1⟩', cx, cy + r + 25);
+            
+            ctx.fillStyle = '#f44336';
+            ctx.fillText('(|0⟩+|1⟩)/√2', ax + 40, ay - 15);
+        }
+
+        // --- Lógica de Geração e Simulação ---
+
+        function generateMaze() {
+            // Labirinto 17x17 com algoritmo de recursive backtracking
+            const maze = Array(MAZE_SIZE).fill(0).map(() => Array(MAZE_SIZE).fill(1));
+            const stack = [{x: 8, y: 8}];
+            maze[8][8] = 0; // Centro
+            
+            let sanity = 0;
+            while(stack.length > 0 && sanity++ < 5000) {
+                const current = stack[stack.length - 1];
+                const dirs = [
+                    {dx: 0, dy: -2}, {dx: 2, dy: 0},
+                    {dx: 0, dy: 2}, {dx: -2, dy: 0}
+                ].sort(() => Math.random() - 0.5);
+                
+                let moved = false;
+                for(let d of dirs) {
+                    let nx = current.x + d.dx, ny = current.y + d.dy;
+                    if(nx >= 0 && nx < MAZE_SIZE && ny >= 0 && ny < MAZE_SIZE && maze[ny][nx] === 1) {
+                        maze[current.y + d.dy/2][current.x + d.dx/2] = 0; // Remove parede
+                        maze[ny][nx] = 0; // Marca caminho
+                        stack.push({x: nx, y: ny});
+                        moved = true;
+                        break;
+                    }
+                }
+                if(!moved) stack.pop();
+            }
+            
+            // Garantir ramificação imediata no centro abrindo as 4 direções:
+            maze[7][8] = 0; // Parede de Cima
+            maze[9][8] = 0; // Parede de Baixo
+            maze[8][7] = 0; // Parede da Esquerda
+            maze[8][9] = 0; // Parede da Direita
+
+            // Adicionar quebras randômicas extras nas paredes válidas para criar múltiplos caminhos simultâneos (ciclos)
+            // Isso destaca ainda mais a superposição (ramificações visuais).
+            for(let i=0; i<35; i++) {
+                let rx = Math.floor(Math.random() * (MAZE_SIZE - 2)) + 1;
+                let ry = Math.floor(Math.random() * (MAZE_SIZE - 2)) + 1;
+                
+                let isHorizontalWall = (rx % 2 === 0 && ry % 2 === 1);
+                let isVerticalWall = (rx % 2 === 1 && ry % 2 === 0);
+                if(isHorizontalWall || isVerticalWall) {
+                    maze[ry][rx] = 0;
+                }
+            }
+
+            return maze;
+        }
+
+        function computeClassicTimeline(maze) {
+            const timeline = [];
+            let stack = [{x: 8, y: 8}];
+            let visited = new Set(['8,8']);
+            let deadEnds = new Set();
+            
+            const captureState = () => ({
+                path: stack.map(p => ({...p})),
+                deadEnds: new Set(deadEnds), 
+                agent: stack.length > 0 ? {...stack[stack.length - 1]} : {x:8, y:8}
+            });
+            
+            timeline.push(captureState());
+            
+            let sanity = 0;
+            while(stack.length > 0 && sanity++ < 5000) {
+                let current = stack[stack.length - 1];
+                if(current.x === 16 && current.y === 16) break; // Encontrou saída
+                
+                // Explora passos de 1 em 1
+                const dirs = [ {dx: 1, dy: 0}, {dx: 0, dy: 1}, {dx: -1, dy: 0}, {dx: 0, dy: -1} ].sort(() => Math.random() - 0.5);
+                
+                let moved = false;
+                for(let d of dirs) {
+                    let nx = current.x + d.dx, ny = current.y + d.dy;
+                    let key = `${nx},${ny}`;
+                    if(nx>=0 && nx<MAZE_SIZE && ny>=0 && ny<MAZE_SIZE && maze[ny][nx] === 0 && !visited.has(key)) {
+                        visited.add(key);
+                        stack.push({x: nx, y: ny});
+                        moved = true;
+                        break; // Fiel ao DFS
+                    }
+                }
+                
+                if(!moved) {
+                    let popped = stack.pop();
+                    deadEnds.add(`${popped.x},${popped.y}`);
+                }
+                timeline.push(captureState());
+            }
+            return timeline;
+        }
+
+        function computeQuantumTimeline(maze) {
+            const timeline = [];
+            let layer = [{x: 8, y: 8}];
+            let visited = new Set(['8,8']);
+            let targetFound = false;
+            
+            timeline.push({ agents: [...layer], visited: new Set(visited) });
+            
+            let sanity = 0;
+            while(layer.length > 0 && !targetFound && sanity++ < 500) {
+                // Checagem prévia
+                for(let pos of layer) {
+                    if(pos.x === 16 && pos.y === 16) targetFound = true;
+                }
+                if (targetFound) break;
+
+                let nextLayer = [];
+                for(let pos of layer) {
+                    const dirs = [ {dx: 1, dy: 0}, {dx: 0, dy: 1}, {dx: -1, dy: 0}, {dx: 0, dy: -1} ];
+                    for(let d of dirs) {
+                        let nx = pos.x + d.dx, ny = pos.y + d.dy;
+                        let key = `${nx},${ny}`;
+                        if(nx>=0 && nx<MAZE_SIZE && ny>=0 && ny<MAZE_SIZE && maze[ny][nx] === 0 && !visited.has(key)) {
+                            visited.add(key);
+                            nextLayer.push({x: nx, y: ny});
+                        }
+                    }
+                }
+                layer = nextLayer;
+                timeline.push({ agents: [...layer], visited: new Set(visited) });
+                
+                // Checagem de sucesso simultâneo
+                for(let pos of layer) {
+                    if(pos.x === 16 && pos.y === 16) targetFound = true;
+                }
+            }
+            return timeline;
+        }
+
+        // --- Renderização Dinâmica ---
+
+        function drawMaze(ctx, sizePx, maze) {
+            const cw = sizePx / MAZE_SIZE;
+            for(let y=0; y<MAZE_SIZE; y++) {
+                for(let x=0; x<MAZE_SIZE; x++) {
+                    ctx.fillStyle = maze[y][x] === 1 ? '#2a2a5a' : '#0d0d2b';
+                    ctx.fillRect(Math.floor(x*cw), Math.floor(y*cw), Math.ceil(cw)+0.5, Math.ceil(cw)+0.5);
+                }
+            }
+            // Entrada (8,8)
+            ctx.fillStyle = 'rgba(105, 240, 174, 0.6)';
+            ctx.fillRect(8*cw, 8*cw, cw, cw);
+            
+            // Saída (16,16)
+            ctx.fillStyle = 'rgba(255, 235, 59, 0.55)';
+            ctx.fillRect(16*cw, 16*cw, cw, cw);
+        }
+
+        function drawClassicStep(ctx, sizePx, maze, state) {
+            const cw = sizePx / MAZE_SIZE;
+            drawMaze(ctx, sizePx, maze);
+            
+            // Visitados (Azul)
+            ctx.fillStyle = 'rgba(58,123,213,0.2)';
+            for(let pos of state.path) {
+                ctx.fillRect(Math.floor(pos.x*cw), Math.floor(pos.y*cw), Math.ceil(cw), Math.ceil(cw));
+            }
+            
+            // Becos sem saída (Vermelho)
+            ctx.fillStyle = 'rgba(239,83,80,0.15)';
+            for(let key of state.deadEnds) {
+                let [x,y] = key.split(',').map(Number);
+                ctx.fillRect(Math.floor(x*cw), Math.floor(y*cw), Math.ceil(cw), Math.ceil(cw));
+            }
+            
+            // Agente Principal
+            let ax = state.agent.x * cw + cw/2;
+            let ay = state.agent.y * cw + cw/2;
+            ctx.fillStyle = '#4fc3f7';
+            ctx.shadowColor = '#4fc3f7';
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(ax, ay, cw/2.5, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        function drawQuantumStep(ctx, sizePx, maze, state) {
+            const cw = sizePx / MAZE_SIZE;
+            drawMaze(ctx, sizePx, maze);
+            
+            // Trail sutil explorado
+            ctx.fillStyle = 'rgba(206, 147, 216, 0.1)';
+            for(let key of state.visited) {
+                let [x,y] = key.split(',').map(Number);
+                ctx.fillRect(Math.floor(x*cw), Math.floor(y*cw), Math.ceil(cw), Math.ceil(cw));
+            }
+
+            // Múltiplos agentes com glow
+            ctx.fillStyle = '#ce93d8';
+            ctx.shadowColor = '#ce93d8';
+            ctx.shadowBlur = 12;
+            for(let pos of state.agents) {
+                let ax = pos.x * cw + cw/2;
+                let ay = pos.y * cw + cw/2;
+                ctx.beginPath();
+                ctx.arc(ax, ay, cw/2.8, 0, Math.PI*2);
+                ctx.fill();
+            }
+            ctx.shadowBlur = 0;
+        }
+
+        // --- Loop Principal ---
+
+        function clickStart() {
+            if(btn.innerText === "RECOMEÇAR") {
+                resetAll();
+                return;
+            }
+            if(isSimulating) return;
+            
+            isSimulating = true;
+            btn.disabled = true;
+            
+            overlayC.classList.remove('active');
+            overlayQ.classList.remove('active');
+            
+            initCanvasSizes();
+            
+            currentMaze = generateMaze();
+            classicTimeline = computeClassicTimeline(currentMaze);
+            quantumTimeline = computeQuantumTimeline(currentMaze);
+            
+            classicDone = false;
+            quantumDone = false;
+            startTime = null; // Reseta para sincronizar com o primeiro frame de requestAnimationFrame
+            
+            if(simLoopId) cancelAnimationFrame(simLoopId);
+            simLoopId = requestAnimationFrame(simLoop);
+        }
+
+        function resetAll() {
+            isSimulating = false;
+            btn.innerText = "COMEÇAR";
+            overlayC.classList.remove('active');
+            overlayQ.classList.remove('active');
+            statusC.innerText = "Pronto para iniciar";
+            statusQ.innerText = "Pronto para iniciar";
+            
+            if(simLoopId) {
+                cancelAnimationFrame(simLoopId);
+                simLoopId = null;
+            }
+
+            initCanvasSizes();
+            renderPreClassic();
+            renderPreQuantum();
+        }
+
+        function simLoop(time) {
+            if(!isSimulating) return;
+            if(!startTime) startTime = time; // Captura o exato milissegundo do frame
+            
+            let elapsed = time - startTime;
+            
+            // Sincroniza dinamicamente aos tempos desejados (Clássico ~3s, Quântico ~0.8s)
+            let cIndex = Math.floor((elapsed / CLASSIC_DUR) * classicTimeline.length);
+            if(cIndex < 0) cIndex = 0;
+            if(cIndex >= classicTimeline.length) cIndex = classicTimeline.length - 1;
+            
+            let qIndex = Math.floor((elapsed / QUANTUM_DUR) * quantumTimeline.length);
+            if(qIndex < 0) qIndex = 0;
+            if(qIndex >= quantumTimeline.length) qIndex = quantumTimeline.length - 1;
+            
+            let cState = classicTimeline[cIndex];
+            let qState = quantumTimeline[qIndex];
+            
+            drawClassicStep(canvasC.getContext('2d'), wC, currentMaze, cState);
+            drawQuantumStep(canvasQ.getContext('2d'), wQ, currentMaze, qState);
+            
+            if(!classicDone) {
+                statusC.innerText = `🔄 Explorando... (${cIndex} passos)`;
+            }
+            if(!quantumDone) {
+                statusQ.innerText = `⚛️ Superposição (${qIndex} passos, ${qState.agents.length} qubits)`;
+            }
+            
+            if(qIndex === quantumTimeline.length - 1 && !quantumDone) {
+                quantumDone = true;
+                let t = (elapsed / 1000).toFixed(2);
+                timeQ.innerText = `Tempo: ${t}s`;
+                overlayQ.classList.add('active');
+                statusQ.innerText = `✅ Encontrado em ${qIndex} passos!`;
+            }
+            
+            if(cIndex === classicTimeline.length - 1 && !classicDone) {
+                classicDone = true;
+                let t = (elapsed / 1000).toFixed(2);
+                timeC.innerText = `Tempo: ${t}s`;
+                overlayC.classList.add('active');
+                statusC.innerText = `✅ Encontrado em ${cIndex} passos!`;
+                
+                btn.disabled = false;
+                btn.innerText = "RECOMEÇAR";
+            }
+            
+            if(!classicDone || !quantumDone) {
+                simLoopId = requestAnimationFrame(simLoop);
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            if(!isSimulating) {
+                initCanvasSizes();
+                renderPreClassic();
+                renderPreQuantum();
+            }
+        });
+
+        window.onload = () => {
+            initCanvasSizes();
+            renderPreClassic();
+            renderPreQuantum();
+        };
+
+    </script>
+</body>
+</html>
